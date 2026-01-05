@@ -1,0 +1,2380 @@
+<!--
+อัปเดต: หน้า “ลงทะเบียน” แสดงภาพกล้อง (live preview) + วาดกรอบตัวอย่างสีให้เห็น
+- ใช้ canvas เดียวกับหน้าแข่งขัน (view) แต่ในหน้า Register จะโชว์ live preview เหมือนกัน
+- เพิ่ม overlay: กรอบ regBox (สีม่วง) + จุดคลิก
+- ปรับ UI register ให้มี canvas อยู่หน้าเดียวเลย (ไม่ต้องเดา)
+-->
+
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeamSPRCLapTimer By KungRC</title>
+  <style>
+    :root{
+      --bg:#0f1115; --card:#151a22; --line:#232b3a; --muted:#98a2b3;
+      --txt:#eef; --green:#2ab673; --yellow:#f0b429; --red:#c44; --blue:#4aa3ff;
+      --purple:#b388ff;
+    }
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;background:var(--bg);color:var(--txt)}
+    header{
+      padding:12px 14px;background:var(--card);position:sticky;top:0;z-index:10;
+      border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;
+    }
+    .brand{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+    .brand strong{font-size:16px}
+    .brand .small{color:var(--muted);font-size:12px}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap}
+    .tabBtn{
+      background:transparent;color:var(--txt);border:1px solid #2a3447;border-radius:12px;
+      padding:8px 10px; cursor:pointer
+    }
+    .tabBtn.active{background:#24314a;border-color:#24314a}
+    .wrap{padding:12px 14px}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
+    @media(min-width:1180px){.grid{grid-template-columns:1.25fr .75fr}}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .col{display:flex;flex-direction:column;gap:10px}
+    button,select,input,textarea{
+      background:var(--bg);color:var(--txt);border:1px solid #2a3447;border-radius:10px;padding:10px 12px
+    }
+    textarea{min-height:70px;resize:vertical}
+    button{cursor:pointer}
+    button.primary{background:var(--green);border-color:var(--green);color:#06120c;font-weight:800}
+    button.warn{background:var(--yellow);border-color:var(--yellow);color:#1a1200;font-weight:800}
+    button.danger{background:var(--red);border-color:var(--red);color:#fff;font-weight:800}
+    button.blue{background:var(--blue);border-color:var(--blue);color:#061021;font-weight:800}
+    button.purple{background:var(--purple);border-color:var(--purple);color:#1a082b;font-weight:900}
+    button.ghost{background:transparent}
+    canvas{width:100%;border-radius:12px;background:#000}
+    .small{opacity:.9;font-size:12px;color:var(--muted)}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+    .pill{display:inline-block;padding:2px 8px;border:1px solid #2a3447;border-radius:999px;font-size:12px;color:var(--muted)}
+    .kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .kpi .box{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:12px}
+    .kpi .v{font-size:22px;font-weight:900;margin-top:6px;color:var(--txt)}
+    table{width:100%;border-collapse:collapse}
+    td,th{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:middle}
+    th{color:var(--muted);font-size:12px;font-weight:800}
+    .nameInput{width:170px;padding:6px 8px;border-radius:10px}
+    .numSmall{width:120px}
+    .hint{opacity:.9;color:var(--muted);font-size:12px;line-height:1.45}
+    .swatch{display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid #2a3447;vertical-align:-2px;margin-right:6px}
+    .seg{display:inline-flex;border:1px solid #2a3447;border-radius:12px;overflow:hidden}
+    .seg button{border:none;border-right:1px solid #2a3447;border-radius:0;padding:8px 10px}
+    .seg button:last-child{border-right:none}
+    .seg button.active{background:#24314a}
+    .twoCol{display:grid;grid-template-columns:1fr;gap:12px}
+    @media(min-width:720px){.twoCol{grid-template-columns:1fr 1fr}}
+    .hidden{display:none !important;}
+    .footerNote{opacity:.85;color:var(--muted);font-size:12px}
+    .badgeOk{color:#8dffb8;font-weight:800}
+    .badgeBad{color:#ff8d8d;font-weight:800}
+    .box2{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:12px}
+    .titleRow{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap}
+    .hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <strong>TeamSPRCLapTimer</strong>
+    <span class="small">Race Mode: ตั้งรอบ • ชนะ • สถิติ • LocalStorage</span>
+  </div>
+
+  <div class="tabs">
+    <button id="tabRace" class="tabBtn active">1) แข่งขัน</button>
+    <button id="tabReg"  class="tabBtn">2) ลงทะเบียน</button>
+    <button id="tabSet"  class="tabBtn">3) ตั้งค่า</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- PAGE 1: RACE -->
+  <section id="pageRace">
+    <div class="grid">
+
+      <div class="card">
+        <div class="titleRow">
+          <div class="row">
+            <button id="btnStart" class="primary">เริ่มกล้อง</button>
+            <button id="btnStop">หยุด</button>
+            <button id="btnResetRun" class="danger">รีเซ็ต Run</button>
+          </div>
+          <div class="row">
+            <select id="selFacing">
+              <option value="environment">กล้องหลัง</option>
+              <option value="user">กล้องหน้า</option>
+            </select>
+            <span class="pill">R=รีเซ็ต / Space=Pause</span>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="row" style="justify-content:space-between;align-items:flex-end">
+          <div class="col" style="gap:4px">
+            <strong>Race Mode</strong>
+            <span class="hint">ตั้ง “จำนวนรอบ” ที่หน้า Settings → กด Start Race → นับรอบจน Finish → ประกาศผล</span>
+          </div>
+          <span class="pill mono" id="raceStateTag">RACE: IDLE</span>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <button id="btnRaceStart" class="purple">Start Race</button>
+          <button id="btnRaceEnd" class="warn">End Race</button>
+          <button id="btnRaceReset" class="danger">Reset Race</button>
+          <span class="pill">Target Laps: <span class="mono" id="lblTargetLaps">--</span></span>
+          <span class="pill">Time: <span class="mono" id="lblRaceClock">00:00.0</span></span>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <div class="box2" style="flex:1;min-width:260px">
+            <div class="small">Winner</div>
+            <div class="mono" id="lblWinner" style="font-size:16px;font-weight:900;margin-top:6px">—</div>
+            <div class="small" id="lblWinnerSub" style="margin-top:4px">ยังไม่จบการแข่งขัน</div>
+          </div>
+          <div class="box2" style="flex:1;min-width:260px">
+            <div class="small">Best Lap (Race)</div>
+            <div class="mono" id="lblBestLapRace" style="font-size:16px;font-weight:900;margin-top:6px">—</div>
+            <div class="small" id="lblBestLapRaceSub" style="margin-top:4px">—</div>
+          </div>
+        </div>
+
+        <video id="video" playsinline muted style="display:none"></video>
+        <canvas id="view"></canvas>
+
+        <div class="row" style="margin-top:10px;justify-content:space-between">
+          <span class="pill" id="modeTag">MODE: Dual-Color AND</span>
+          <span class="mono small" id="lblFps">FPS: --</span>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <button id="btnSetROI" class="blue">ตั้ง ROI (คลิก 2 จุด)</button>
+          <button id="btnClearROI">ล้าง ROI</button>
+          <span class="hint">เรือ: ROI แคบๆ รอบ Gate ลดคลื่นนับมั่ว</span>
+        </div>
+
+        <div class="row" style="margin-top:12px">
+          <button id="btnExport">Export CSV</button>
+          <button id="btnClearLog">Clear Log</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="kpi">
+          <div class="box">
+            <div class="small">Active Tracks</div>
+            <div id="kpiTracks" class="v mono">0</div>
+          </div>
+          <div class="box">
+            <div class="small">Total Laps</div>
+            <div id="kpiLaps" class="v mono">0</div>
+          </div>
+          <div class="box">
+            <div class="small">Last Event</div>
+            <div id="kpiLast" class="v mono">--</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <div class="titleRow">
+            <strong>Race Standings</strong>
+            <span class="small">เรียงตาม Finish/Progress</span>
+          </div>
+          <div style="max-height:260px;overflow:auto;margin-top:8px">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pos</th>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Lap</th>
+                  <th>Best</th>
+                  <th>Total</th>
+                  <th>Gap</th>
+                </tr>
+              </thead>
+              <tbody id="tblRace"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <div class="titleRow">
+            <strong>Leaderboard (All Time)</strong>
+            <span class="small">เรียงตาม Best Lap</span>
+          </div>
+          <div style="max-height:260px;overflow:auto;margin-top:8px">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Laps</th>
+                  <th>Best</th>
+                  <th>Avg</th>
+                </tr>
+              </thead>
+              <tbody id="tblBoard"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <div class="titleRow">
+            <strong>Lap Log</strong>
+            <span class="small">บันทึกต่อรอบ</span>
+          </div>
+          <div style="max-height:260px;overflow:auto;margin-top:8px">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Lap#</th>
+                  <th>Lap Time</th>
+                </tr>
+              </thead>
+              <tbody id="tblLog"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="footerNote" style="margin-top:10px">
+          ถ้าเรือผ่านพร้อมกันหลายลำ: ลงทะเบียนสีให้ครบ + ตั้ง Gate/ROI ให้พอดี ไม่งั้นมันจะ “เดา” แล้วเดาแบบมั่นใจผิดๆ 😅
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- PAGE 2: REGISTER (UPDATED: SHOW CAMERA LIVE) -->
+  <section id="pageReg" class="hidden">
+    <div class="grid">
+
+      <!-- LEFT: Live camera preview + register controls -->
+      <div class="card">
+        <div class="titleRow">
+          <div class="col" style="gap:4px">
+            <strong>ลงทะเบียนสีเรือ (A/B) — เห็นภาพกล้องด้วย</strong>
+            <span class="hint">ถ้ายังไม่เริ่มกล้อง ให้กด “เริ่มกล้อง” ด้านบนหน้าแข่งขันก่อน (แชร์กล้องตัวเดียวกัน)</span>
+          </div>
+          <span class="pill mono" id="lblRegState">READY</span>
+        </div>
+
+        <!-- Live preview -->
+        <div class="row" style="margin-top:10px">
+          <span class="pill">Live Preview</span>
+          <span class="small">คลิก 2 จุดเพื่อครอบ “สี” ที่ต้องการ (กรอบม่วง)</span>
+        </div>
+        <canvas id="viewReg"></canvas>
+
+        <div class="row" style="margin-top:10px">
+          <label class="small">เลือก ID:</label>
+          <select id="regId"></select>
+
+          <div class="seg" title="เลือกว่าจะลงทะเบียนสี A หรือสี B">
+            <button id="btnSlotA" class="active">Slot A</button>
+            <button id="btnSlotB">Slot B</button>
+          </div>
+
+          <button id="btnRegStart" class="warn">เริ่ม REG</button>
+          <button id="btnRegClear" class="ghost">ลบสี Slot</button>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <button id="btnRegCapture" class="warn" disabled>เก็บตัวอย่าง</button>
+          <select id="regFrames">
+            <option value="3">3 เฟรม</option>
+            <option value="5" selected>5 เฟรม</option>
+          </select>
+          <button id="btnRegSave" class="primary" disabled>บันทึก</button>
+          <label class="small"><input type="checkbox" id="regAutoTol" checked> tol อัตโนมัติ</label>
+        </div>
+
+        <div class="row small" style="margin-top:6px">
+          <span class="pill">AND = ต้องเจอ A + B พร้อมกันถึงนับ</span>
+          <span class="pill">ทริค: ครอบเฉพาะสี อย่าครอบน้ำ/เงา</span>
+        </div>
+
+        <div class="row small" style="margin-top:6px">
+          <span class="mono" id="lblSample">Sample: --</span>
+        </div>
+      </div>
+
+      <!-- RIGHT: Registry -->
+      <div class="card">
+        <div class="titleRow">
+          <strong>Boat Registry (ชื่อ + สี A/B)</strong>
+          <span class="small">แก้ชื่อได้ตลอด</span>
+        </div>
+
+        <div style="max-height:560px;overflow:auto;margin-top:8px">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>ชื่อ</th>
+                <th>Color A</th>
+                <th>Color B</th>
+                <th>Laps</th>
+                <th>Best</th>
+              </tr>
+            </thead>
+            <tbody id="tblRegistry"></tbody>
+          </table>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <button id="btnResetNames" class="ghost">Reset Names</button>
+          <button id="btnWipeRegistry" class="danger">ล้าง Registry สี</button>
+        </div>
+
+        <div class="hint" style="margin-top:10px">
+          ลงแค่สีเดียวก็ยังจับได้ แต่ “กันคลื่น/แสง” ของจริงคือ A+B (AND) นี่แหละ
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- PAGE 3: SETTINGS -->
+  <section id="pageSet" class="hidden">
+    <!-- (เหมือนเดิม) -->
+    <div class="twoCol">
+      <div class="card">
+        <div class="titleRow">
+          <strong>ตั้งค่าแข่ง</strong>
+          <span class="small mono" id="lblSaveState"></span>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <button id="btnPresetBoat" class="warn">ตั้งค่าแนะนำ: เรือ</button>
+          <button id="btnPresetCar">ตั้งค่าแนะนำ: รถ</button>
+          <button id="btnSave" class="ghost">Save</button>
+          <button id="btnDefaults" class="ghost">Reset settings</button>
+        </div>
+
+        <div class="hr"></div>
+
+        <strong>Race Config</strong>
+        <div class="row" style="margin-top:10px">
+          <label class="small" style="min-width:190px">Target Laps:</label>
+          <input id="targetLaps" class="numSmall" type="number" min="1" max="999" step="1" value="5" />
+          <span class="small">จำนวนรอบที่ต้องการ “Finish”</span>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <label class="small"><input type="checkbox" id="autoEndRace" checked> Auto End เมื่อมีผู้ชนะ</label>
+          <label class="small"><input type="checkbox" id="allowDNF" checked> Allow DNF (ไม่จบก็ขึ้นผล)</label>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="row">
+          <label class="small" style="min-width:190px">จำนวนเรือ (Max IDs):</label>
+          <input id="maxIds" class="numSmall" type="number" min="1" max="50" step="1" value="6" />
+          <span class="small mono" id="lblMaxIds"></span>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <label class="small" style="min-width:190px">Cooldown (s): <span id="lblCooldown" class="mono"></span></label>
+          <input id="cooldown" type="range" min="0" max="5" step="0.1" value="1.0" style="flex:1" />
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <label class="small" style="min-width:190px">Direction:</label>
+          <select id="direction">
+            <option value="L2R">ซ้าย → ขวา</option>
+            <option value="R2L">ขวา → ซ้าย</option>
+          </select>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <label class="small" style="min-width:190px">Gate X: <span id="lblGateX" class="mono"></span></label>
+          <input id="gateX" type="range" min="30" max="610" value="320" style="flex:1" />
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <label class="small" style="min-width:190px">Gate Zone (px): <span id="lblZone" class="mono"></span></label>
+          <input id="zone" type="range" min="8" max="90" value="30" style="flex:1" />
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <label class="small" style="min-width:190px">Assign Dist: <span id="lblDist" class="mono"></span></label>
+          <input id="assignDist" type="range" min="15" max="240" value="95" style="flex:1" />
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <label class="small" style="min-width:190px">Max Gap: <span id="lblGap" class="mono"></span></label>
+          <input id="maxGap" type="range" min="2" max="60" value="18" style="flex:1" />
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="row">
+          <label class="small"><input type="checkbox" id="useColor" checked> Anti-glare (ใช้สี)</label>
+          <label class="small"><input type="checkbox" id="useMotion" checked> Motion fallback</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <strong>ตั้งค่าสี (HSV)</strong>
+        <div class="row" style="margin-top:10px">
+          <label class="small" style="min-width:190px">HSV Tol (deg): <span id="lblTol" class="mono"></span></label>
+          <input id="hsvTol" type="range" min="5" max="80" value="24" style="flex:1" />
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <label class="small" style="min-width:190px">Min Color Area: <span id="lblMinColorArea" class="mono"></span></label>
+          <input id="minColorArea" type="range" min="40" max="6000" value="700" style="flex:1" />
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <label class="small" style="min-width:190px">S min: <span id="lblSmin" class="mono"></span></label>
+          <input id="sMin" type="range" min="0" max="255" value="70" style="flex:1" />
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <label class="small" style="min-width:190px">V min: <span id="lblVmin" class="mono"></span></label>
+          <input id="vMin" type="range" min="0" max="255" value="50" style="flex:1" />
+        </div>
+
+        <div class="hr"></div>
+
+        <strong>ตั้งค่า Motion (ถ้าเปิด)</strong>
+        <div class="row" style="margin-top:10px">
+          <label class="small" style="min-width:190px">DiffTh: <span id="lblDiff" class="mono"></span></label>
+          <input id="diffTh" type="range" min="4" max="50" value="22" style="flex:1" />
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <label class="small" style="min-width:190px">Min Blob: <span id="lblMinArea" class="mono"></span></label>
+          <input id="minArea" type="range" min="60" max="6000" value="1600" style="flex:1" />
+        </div>
+
+        <div class="hr"></div>
+
+        <strong>โน้ต</strong>
+        <div class="hint" style="margin-top:8px">
+          - เรือคลื่นแรง: ปิด Motion แล้วพึ่งสี A+B ล้วนๆ จะนิ่งกว่า<br>
+          - รถบนพื้นเรียบ: เปิด Motion ช่วยจับหลายคันพร้อมกันได้ดีขึ้น<br>
+          - อยากแม่น: ตั้ง ROI ให้เหลือ “แถบใกล้ Gate” เท่านั้น
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(() => {
+  // ---------------- DOM (tabs/pages) ----------------
+  const tabRace = document.getElementById('tabRace');
+  const tabReg  = document.getElementById('tabReg');
+  const tabSet  = document.getElementById('tabSet');
+  const pageRace = document.getElementById('pageRace');
+  const pageReg  = document.getElementById('pageReg');
+  const pageSet  = document.getElementById('pageSet');
+
+  function setActiveTab(which){
+    const map = {
+      race:[tabRace,pageRace],
+      reg:[tabReg,pageReg],
+      set:[tabSet,pageSet],
+    };
+    for(const k of Object.keys(map)){
+      map[k][0].classList.toggle('active', k===which);
+      map[k][1].classList.toggle('hidden', k!==which);
+    }
+  }
+  tabRace.addEventListener('click', ()=>setActiveTab('race'));
+  tabReg .addEventListener('click', ()=>setActiveTab('reg'));
+  tabSet .addEventListener('click', ()=>setActiveTab('set'));
+
+  // ---------------- DOM (core) ----------------
+  const video = document.getElementById('video');
+
+  // Race canvas
+  const view  = document.getElementById('view');
+  const ctx   = view.getContext('2d', { willReadFrequently: true });
+  // Register canvas (NEW)
+  const viewReg = document.getElementById('viewReg');
+  const ctxReg  = viewReg.getContext('2d', { willReadFrequently: true });
+
+  const btnStart = document.getElementById('btnStart');
+  const btnStop  = document.getElementById('btnStop');
+  const btnResetRun = document.getElementById('btnResetRun');
+  const selFacing = document.getElementById('selFacing');
+
+  const btnExport = document.getElementById('btnExport');
+  const btnClearLog = document.getElementById('btnClearLog');
+
+  const btnSetROI = document.getElementById('btnSetROI');
+  const btnClearROI = document.getElementById('btnClearROI');
+
+  const modeTag = document.getElementById('modeTag');
+  const lblFps  = document.getElementById('lblFps');
+
+  const kpiTracks = document.getElementById('kpiTracks');
+  const kpiLaps   = document.getElementById('kpiLaps');
+  const kpiLast   = document.getElementById('kpiLast');
+
+  const tblLog = document.getElementById('tblLog');
+  const tblBoard = document.getElementById('tblBoard');
+  const tblRace = document.getElementById('tblRace');
+
+  // Race UI
+  const btnRaceStart = document.getElementById('btnRaceStart');
+  const btnRaceEnd   = document.getElementById('btnRaceEnd');
+  const btnRaceReset = document.getElementById('btnRaceReset');
+  const raceStateTag = document.getElementById('raceStateTag');
+  const lblTargetLaps = document.getElementById('lblTargetLaps');
+  const lblRaceClock  = document.getElementById('lblRaceClock');
+  const lblWinner = document.getElementById('lblWinner');
+  const lblWinnerSub = document.getElementById('lblWinnerSub');
+  const lblBestLapRace = document.getElementById('lblBestLapRace');
+  const lblBestLapRaceSub = document.getElementById('lblBestLapRaceSub');
+
+  // Settings page
+  const btnPresetBoat = document.getElementById('btnPresetBoat');
+  const btnPresetCar  = document.getElementById('btnPresetCar');
+  const btnSave = document.getElementById('btnSave');
+  const btnDefaults = document.getElementById('btnDefaults');
+  const lblSaveState = document.getElementById('lblSaveState');
+
+  const targetLapsEl = document.getElementById('targetLaps');
+  const autoEndRaceEl = document.getElementById('autoEndRace');
+  const allowDNFEl = document.getElementById('allowDNF');
+
+  const maxIdsEl = document.getElementById('maxIds');
+  const lblMaxIds = document.getElementById('lblMaxIds');
+
+  const cooldownEl = document.getElementById('cooldown');
+  const gateXEl = document.getElementById('gateX');
+  const zoneEl  = document.getElementById('zone');
+  const directionEl = document.getElementById('direction');
+  const assignDistEl = document.getElementById('assignDist');
+  const maxGapEl = document.getElementById('maxGap');
+
+  const useColorEl = document.getElementById('useColor');
+  const useMotionEl = document.getElementById('useMotion');
+
+  const hsvTolEl = document.getElementById('hsvTol');
+  const minColorAreaEl = document.getElementById('minColorArea');
+  const sMinEl = document.getElementById('sMin');
+  const vMinEl = document.getElementById('vMin');
+
+  const diffThEl = document.getElementById('diffTh');
+  const minAreaEl = document.getElementById('minArea');
+
+  const lblCooldown = document.getElementById('lblCooldown');
+  const lblGateX = document.getElementById('lblGateX');
+  const lblZone  = document.getElementById('lblZone');
+  const lblDist  = document.getElementById('lblDist');
+  const lblGap   = document.getElementById('lblGap');
+
+  const lblTol = document.getElementById('lblTol');
+  const lblMinColorArea = document.getElementById('lblMinColorArea');
+  const lblSmin = document.getElementById('lblSmin');
+  const lblVmin = document.getElementById('lblVmin');
+  const lblDiff = document.getElementById('lblDiff');
+  const lblMinArea = document.getElementById('lblMinArea');
+
+  // Register page
+  const regIdEl = document.getElementById('regId');
+  const btnRegStart = document.getElementById('btnRegStart');
+  const btnRegCapture = document.getElementById('btnRegCapture');
+  const btnRegSave = document.getElementById('btnRegSave');
+  const btnRegClear = document.getElementById('btnRegClear');
+  const lblRegState = document.getElementById('lblRegState');
+  const lblSample = document.getElementById('lblSample');
+  const regAutoTolEl = document.getElementById('regAutoTol');
+  const btnSlotA = document.getElementById('btnSlotA');
+  const btnSlotB = document.getElementById('btnSlotB');
+  const regFramesEl = document.getElementById('regFrames');
+
+  const tblRegistry = document.getElementById('tblRegistry');
+  const btnResetNames = document.getElementById('btnResetNames');
+  const btnWipeRegistry = document.getElementById('btnWipeRegistry');
+
+  // ---------------- CONST/STATE ----------------
+  const W = 640, H = 480;
+  view.width = W; view.height = H;
+  viewReg.width = W; viewReg.height = H;
+
+  let stream = null;
+  let rafId = null;
+  let paused = false;
+
+  // ROI selection (race page)
+  let roi = null;
+  let settingROI = false;
+  let roiClicks = [];
+
+  // Motion
+  let prevGray = new Uint8ClampedArray(W * H);
+  let hasPrev = false;
+
+  // Active tracks: id -> {x,y,vx,vy,missed,bbox,side}
+  const tracks = new Map();
+
+  // boats map
+  const boats = new Map();
+
+  // lap log (all-time log)
+  const log = [];
+
+  // FPS
+  let lastFpsT = performance.now();
+  let fpsFrames = 0;
+
+  // Storage keys
+  const LS_SETTINGS = "rc_boat_dualcolor_settings_race_v4";
+  const LS_BOATS    = "rc_boat_dualcolor_boats_race_v4";
+
+  const PRESET_BOAT = {
+    targetLaps: 5,
+    autoEndRace: true,
+    allowDNF: true,
+    maxIds: 6,
+    cooldown: 1.0,
+    gateX: 320, zone: 30, direction: "L2R",
+    assignDist: 95, maxGap: 18,
+    useColor: true,
+    useMotion: false,
+    hsvTol: 24,
+    minColorArea: 700,
+    sMin: 70,
+    vMin: 50,
+    diffTh: 22,
+    minArea: 1600,
+    roi: null
+  };
+
+  const PRESET_CAR = {
+    targetLaps: 6,
+    autoEndRace: true,
+    allowDNF: true,
+    maxIds: 6,
+    cooldown: 0.7,
+    gateX: 320, zone: 24, direction: "L2R",
+    assignDist: 85, maxGap: 14,
+    useColor: true,
+    useMotion: true,
+    hsvTol: 22,
+    minColorArea: 600,
+    sMin: 60,
+    vMin: 40,
+    diffTh: 14,
+    minArea: 900,
+    roi: null
+  };
+
+  // Race state
+  const race = {
+    active: false,
+    startMs: null,
+    endMs: null,
+    finishedOrder: [],
+    winnerId: null,
+  };
+
+  // Registration state
+  let regMode=false;
+  let regClicks=[];
+  let regBox=null;
+  let regSlot="A";
+  let sampleBuf=[];
+  let lastComputed=null;
+
+  // ---------------- HELPERS ----------------
+  const clamp = (v,a,b)=>Math.max(a, Math.min(b,v));
+  const nowSec = ()=>performance.now()/1000;
+
+  function msToClock(ms){
+    if(!isFinite(ms)) return "00:00.0";
+    const s = ms/1000;
+    const m = Math.floor(s/60);
+    const sec = s - m*60;
+    return String(m).padStart(2,'0')+":"+sec.toFixed(1).padStart(4,'0');
+  }
+  function mmss(sec){
+    if(!isFinite(sec)) return "--:--";
+    const m=Math.floor(sec/60), s=Math.floor(sec%60);
+    return String(m).padStart(2,'0')+":"+String(s).padStart(2,'0');
+  }
+  function mmssms(sec){
+    if(!isFinite(sec)) return "--:--.-";
+    const m=Math.floor(sec/60);
+    const s=(sec-m*60);
+    return String(m).padStart(2,'0')+":"+s.toFixed(1).padStart(4,'0');
+  }
+  function flash(t){
+    lblSaveState.textContent=t;
+    setTimeout(()=>lblSaveState.textContent="", 900);
+  }
+  function escapeHtml(s){
+    return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+  }
+  function getMaxIds(){
+    const n = parseInt(maxIdsEl.value || "1", 10);
+    return clamp(Number.isFinite(n)?n:1, 1, 50);
+  }
+  function getTargetLaps(){
+    const n = parseInt(targetLapsEl.value || "1", 10);
+    return clamp(Number.isFinite(n)?n:1, 1, 999);
+  }
+
+  function ensureBoat(id){
+    if(!boats.has(id)){
+      boats.set(id, {
+        name:`Boat ${id}`,
+        lapTimes:[],
+        lastLapTsMs:null,
+        lastTriggerSec:-999,
+        colorA:null,
+        colorB:null,
+        race: { startedAtMs:null, finishedAtMs:null }
+      });
+    } else {
+      const b = boats.get(id);
+      if(!b.race) b.race={startedAtMs:null, finishedAtMs:null};
+      if(!("startedAtMs" in b.race)) b.race.startedAtMs=null;
+      if(!("finishedAtMs" in b.race)) b.race.finishedAtMs=null;
+    }
+  }
+  function getBoatName(id){
+    ensureBoat(id);
+    const n = boats.get(id).name || "";
+    return n.trim()?n.trim():`Boat ${id}`;
+  }
+  function totalLapsAllBoats(maxIds){
+    let total=0;
+    for(let id=1; id<=maxIds; id++){
+      ensureBoat(id);
+      total += boats.get(id).lapTimes.length;
+    }
+    return total;
+  }
+  function avg(arr){
+    if(!arr || !arr.length) return NaN;
+    return arr.reduce((a,c)=>a+c,0)/arr.length;
+  }
+  function best(arr){
+    if(!arr || !arr.length) return NaN;
+    return Math.min(...arr);
+  }
+  function stddev(arr){
+    if(!arr || arr.length<2) return NaN;
+    const m = avg(arr);
+    const v = arr.reduce((s,x)=>s+(x-m)*(x-m),0)/(arr.length-1);
+    return Math.sqrt(v);
+  }
+  function normalizeSig(sig){
+    return {
+      h:Number(sig.h),
+      tol:Number(sig.tol),
+      sMin:Number(sig.sMin),
+      vMin:Number(sig.vMin),
+      areaMin:Number(sig.areaMin)
+    };
+  }
+
+  function saveBoats(){
+    const obj = {};
+    for(const [id,b] of boats.entries()){
+      obj[id] = {
+        name:b.name,
+        lapTimes:b.lapTimes,
+        lastLapTsMs:b.lastLapTsMs,
+        lastTriggerSec:b.lastTriggerSec,
+        colorA:b.colorA,
+        colorB:b.colorB,
+        race:b.race
+      };
+    }
+    localStorage.setItem(LS_BOATS, JSON.stringify(obj));
+  }
+  function loadBoats(){
+    try{
+      const raw=localStorage.getItem(LS_BOATS);
+      if(!raw) return;
+      const obj=JSON.parse(raw);
+      for(const k of Object.keys(obj)){
+        const id=parseInt(k,10);
+        if(!Number.isFinite(id)) continue;
+        const b=obj[k]||{};
+        boats.set(id,{
+          name:String(b.name ?? `Boat ${id}`),
+          lapTimes:Array.isArray(b.lapTimes)?b.lapTimes.map(Number).filter(x=>isFinite(x)):[],
+          lastLapTsMs:(b.lastLapTsMs===null||b.lastLapTsMs===undefined)?null:Number(b.lastLapTsMs),
+          lastTriggerSec:isFinite(b.lastTriggerSec)?Number(b.lastTriggerSec):-999,
+          colorA:(b.colorA && typeof b.colorA==="object")?normalizeSig(b.colorA):null,
+          colorB:(b.colorB && typeof b.colorB==="object")?normalizeSig(b.colorB):null,
+          race: (b.race && typeof b.race==="object") ? {
+            startedAtMs: b.race.startedAtMs ?? null,
+            finishedAtMs: b.race.finishedAtMs ?? null
+          } : {startedAtMs:null, finishedAtMs:null}
+        });
+      }
+    }catch{}
+  }
+
+  function getSettings(){
+    return {
+      targetLaps:getTargetLaps(),
+      autoEndRace:!!autoEndRaceEl.checked,
+      allowDNF:!!allowDNFEl.checked,
+      maxIds:getMaxIds(),
+      cooldown:+cooldownEl.value,
+      gateX:+gateXEl.value,
+      zone:+zoneEl.value,
+      direction:directionEl.value,
+      assignDist:+assignDistEl.value,
+      maxGap:+maxGapEl.value,
+      useColor:!!useColorEl.checked,
+      useMotion:!!useMotionEl.checked,
+      hsvTol:+hsvTolEl.value,
+      minColorArea:+minColorAreaEl.value,
+      sMin:+sMinEl.value,
+      vMin:+vMinEl.value,
+      diffTh:+diffThEl.value,
+      minArea:+minAreaEl.value,
+      roi: roi ? [...roi] : null
+    };
+  }
+  function applySettings(s, {doFlash=true} = {}){
+    targetLapsEl.value = clamp(s.targetLaps ?? getTargetLaps(), 1, 999);
+    autoEndRaceEl.checked = (s.autoEndRace ?? autoEndRaceEl.checked);
+    allowDNFEl.checked = (s.allowDNF ?? allowDNFEl.checked);
+
+    maxIdsEl.value = clamp(s.maxIds ?? getMaxIds(), 1, 50);
+
+    cooldownEl.value = clamp(s.cooldown ?? +cooldownEl.value, 0, 5);
+    gateXEl.value = clamp(s.gateX ?? +gateXEl.value, 30, 610);
+    zoneEl.value  = clamp(s.zone  ?? +zoneEl.value, 8, 90);
+    directionEl.value = s.direction ?? directionEl.value;
+
+    assignDistEl.value = clamp(s.assignDist ?? +assignDistEl.value, 15, 240);
+    maxGapEl.value = clamp(s.maxGap ?? +maxGapEl.value, 2, 60);
+
+    useColorEl.checked = (s.useColor ?? useColorEl.checked);
+    useMotionEl.checked = (s.useMotion ?? useMotionEl.checked);
+
+    hsvTolEl.value = clamp(s.hsvTol ?? +hsvTolEl.value, 5, 80);
+    minColorAreaEl.value = clamp(s.minColorArea ?? +minColorAreaEl.value, 40, 6000);
+    sMinEl.value = clamp(s.sMin ?? +sMinEl.value, 0, 255);
+    vMinEl.value = clamp(s.vMin ?? +vMinEl.value, 0, 255);
+
+    diffThEl.value = clamp(s.diffTh ?? +diffThEl.value, 4, 50);
+    minAreaEl.value = clamp(s.minArea ?? +minAreaEl.value, 60, 6000);
+
+    roi = (s.roi && Array.isArray(s.roi) && s.roi.length===4) ? s.roi.map(v=>v|0) : null;
+
+    updateLabels();
+    enforceMaxIds();
+    renderRegistry();
+    renderBoard();
+    renderRace();
+    if(doFlash) flash("Applied");
+  }
+  function saveSettings(){
+    localStorage.setItem(LS_SETTINGS, JSON.stringify(getSettings()));
+    flash("Saved ✓");
+  }
+  function loadSettings(){
+    try{
+      const raw=localStorage.getItem(LS_SETTINGS);
+      return raw?JSON.parse(raw):null;
+    }catch{ return null; }
+  }
+  function resetSettings(){
+    localStorage.removeItem(LS_SETTINGS);
+    applySettings(PRESET_BOAT, {doFlash:false});
+    saveSettings();
+    flash("Reset ✓");
+  }
+  function enforceMaxIds(){
+    const maxIds=getMaxIds();
+    for(const [id] of tracks.entries()){
+      if(id>maxIds) tracks.delete(id);
+    }
+    for(let id=1; id<=maxIds; id++) ensureBoat(id);
+    syncRegIdOptions();
+    saveBoats();
+    kpiLaps.textContent=String(totalLapsAllBoats(maxIds));
+    lblTargetLaps.textContent = String(getTargetLaps());
+  }
+  function updateModeTag(){
+    const c = useColorEl.checked, m = useMotionEl.checked;
+    modeTag.textContent = `MODE: Dual-Color AND ${c?"ON":"OFF"}${m?" + Motion":" (no motion)"}`;
+  }
+  function updateLabels(){
+    lblMaxIds.textContent = `ตอนนี้: ${getMaxIds()} IDs`;
+    lblCooldown.textContent = cooldownEl.value;
+    lblGateX.textContent = gateXEl.value;
+    lblZone  .textContent = zoneEl.value;
+    lblDist  .textContent = assignDistEl.value;
+    lblGap   .textContent = maxGapEl.value;
+
+    lblTol.textContent = hsvTolEl.value;
+    lblMinColorArea.textContent = minColorAreaEl.value;
+    lblSmin.textContent = sMinEl.value;
+    lblVmin.textContent = vMinEl.value;
+
+    lblDiff.textContent = diffThEl.value;
+    lblMinArea.textContent = minAreaEl.value;
+
+    lblTargetLaps.textContent = String(getTargetLaps());
+    updateModeTag();
+  }
+
+  // ---------------- ROI bounds ----------------
+  function roiBounds(){
+    const [x1,y1,x2,y2] = roi ? roi : [0,0,W-1,H-1];
+    const rx1 = Math.max(0, Math.min(x1,x2));
+    const ry1 = Math.max(0, Math.min(y1,y2));
+    const rx2 = Math.min(W-1, Math.max(x1,x2));
+    const ry2 = Math.min(H-1, Math.max(y1,y2));
+    return {rx1,ry1,rx2,ry2};
+  }
+
+  // ---------------- Race helpers ----------------
+  function setRaceTag(){
+    if(race.active) raceStateTag.textContent = "RACE: RUNNING";
+    else if(race.endMs) raceStateTag.textContent = "RACE: ENDED";
+    else raceStateTag.textContent = "RACE: IDLE";
+  }
+  function raceClockMs(){
+    if(!race.startMs) return 0;
+    const end = race.endMs ?? Date.now();
+    return Math.max(0, end - race.startMs);
+  }
+  function updateRaceClockUI(){
+    lblRaceClock.textContent = msToClock(raceClockMs());
+    setRaceTag();
+  }
+  function resetRaceState({keepAllTimeLaps=true} = {}){
+    race.active=false;
+    race.startMs=null;
+    race.endMs=null;
+    race.finishedOrder.length=0;
+    race.winnerId=null;
+
+    const maxIds=getMaxIds();
+    for(let id=1; id<=maxIds; id++){
+      ensureBoat(id);
+      boats.get(id).race.startedAtMs=null;
+      boats.get(id).race.finishedAtMs=null;
+      if(!keepAllTimeLaps){
+        boats.get(id).lapTimes.length=0;
+        boats.get(id).lastLapTsMs=null;
+      }
+    }
+    saveBoats();
+    renderRace();
+    renderBoard();
+    renderRegistry();
+
+    lblWinner.textContent="—";
+    lblWinnerSub.textContent="ยังไม่จบการแข่งขัน";
+    lblBestLapRace.textContent="—";
+    lblBestLapRaceSub.textContent="—";
+
+    updateRaceClockUI();
+  }
+  function startRace(){
+    resetRaceState({keepAllTimeLaps:true});
+    race.active=true;
+    race.startMs=Date.now();
+    race.endMs=null;
+    race.finishedOrder.length=0;
+    race.winnerId=null;
+
+    const maxIds=getMaxIds();
+    for(let id=1; id<=maxIds; id++){
+      ensureBoat(id);
+      boats.get(id).race.startedAtMs=null;
+      boats.get(id).race.finishedAtMs=null;
+    }
+    saveBoats();
+    renderRace();
+    updateRaceClockUI();
+    kpiLast.textContent="Race started";
+  }
+  function endRace(reason="Race ended"){
+    if(!race.startMs){
+      race.endMs=Date.now();
+      race.active=false;
+      setRaceTag();
+      renderRace();
+      updateRaceClockUI();
+      return;
+    }
+    race.endMs = Date.now();
+    race.active=false;
+    setRaceTag();
+    renderRace();
+    computeRaceAwardsAndAnnounce(reason);
+    updateRaceClockUI();
+  }
+  function computeRaceAwardsAndAnnounce(reason="Race finished"){
+    const maxIds=getMaxIds();
+    const target=getTargetLaps();
+    const allowDNF=!!allowDNFEl.checked;
+
+    const raceLapsById = new Map();
+    const raceLapTimesById = new Map();
+    for(let id=1; id<=maxIds; id++){
+      raceLapsById.set(id, 0);
+      raceLapTimesById.set(id, []);
+    }
+    if(race.startMs){
+      for(const rec of log){
+        const t = Date.parse(rec.iso);
+        if(isFinite(t) && t >= race.startMs){
+          raceLapsById.set(rec.id, (raceLapsById.get(rec.id)||0)+1);
+          raceLapTimesById.get(rec.id).push(rec.lapSec);
+        }
+      }
+    }
+
+    let winnerId=null, winnerTotal=Infinity;
+    for(let id=1; id<=maxIds; id++){
+      ensureBoat(id);
+      const b=boats.get(id);
+      const laps = raceLapsById.get(id)||0;
+      if(laps>=target && b.race.finishedAtMs){
+        const total = b.race.finishedAtMs - (b.race.startedAtMs ?? race.startMs);
+        if(total < winnerTotal){
+          winnerTotal=total; winnerId=id;
+        }
+      }
+    }
+    race.winnerId = winnerId;
+
+    let bestLapSec=Infinity, bestLapId=null;
+    for(let id=1; id<=maxIds; id++){
+      const arr = raceLapTimesById.get(id) || [];
+      for(const t of arr){
+        if(t < bestLapSec){bestLapSec=t; bestLapId=id;}
+      }
+    }
+
+    let bestAvg=Infinity, bestAvgId=null;
+    for(let id=1; id<=maxIds; id++){
+      const arr = raceLapTimesById.get(id) || [];
+      if(arr.length>=2){
+        const a = avg(arr);
+        if(a < bestAvg){bestAvg=a; bestAvgId=id;}
+      }
+    }
+
+    if(winnerId){
+      lblWinner.textContent = `🏆 ${getBoatName(winnerId)} (ID ${winnerId})`;
+      lblWinnerSub.textContent = `Total: ${msToClock(winnerTotal)} • Target ${target} laps • ${reason}`;
+    } else {
+      lblWinner.textContent = "—";
+      lblWinnerSub.textContent = allowDNF
+        ? `ไม่มีผู้ครบ ${target} รอบ (DNF) • ${reason}`
+        : `ยังไม่มีผู้ชนะ • ${reason}`;
+    }
+
+    if(isFinite(bestLapSec)){
+      lblBestLapRace.textContent = `⚡ ${mmssms(bestLapSec)} (ID ${bestLapId})`;
+      const aId = isFinite(bestAvg) ? ` • Fastest Avg: ${mmssms(bestAvg)} (ID ${bestAvgId})` : "";
+      lblBestLapRaceSub.textContent = `${getBoatName(bestLapId)}${aId}`;
+    } else {
+      lblBestLapRace.textContent = "—";
+      lblBestLapRaceSub.textContent = "ยังไม่มี lap time";
+    }
+  }
+
+  // ---------------- Registry UI ----------------
+  function hsvToRgb(h, s, v){
+    s/=255; v/=255;
+    const c=v*s;
+    const x=c*(1-Math.abs(((h/60)%2)-1));
+    const m=v-c;
+    let r=0,g=0,b=0;
+    if(h<60){r=c;g=x;b=0;}
+    else if(h<120){r=x;g=c;b=0;}
+    else if(h<180){r=0;g=c;b=x;}
+    else if(h<240){r=0;g=x;b=c;}
+    else if(h<300){r=x;g=0;b=c;}
+    else {r=c;g=0;b=x;}
+    return {r:Math.round((r+m)*255), g:Math.round((g+m)*255), b:Math.round((b+m)*255)};
+  }
+  function rgbToHex(r,g,b){
+    const to=(x)=>x.toString(16).padStart(2,'0');
+    return `#${to(r)}${to(g)}${to(b)}`;
+  }
+  function badge(sig){
+    if(!sig) return `<span class="small">—</span>`;
+    const rgb=hsvToRgb(sig.h, 220, 220);
+    const hex=rgbToHex(rgb.r,rgb.g,rgb.b);
+    return `<span class="swatch" style="background:${hex}"></span><span class="small mono">H${sig.h.toFixed(0)}±${sig.tol.toFixed(0)}</span>`;
+  }
+
+  function renderRegistry(){
+    const maxIds=getMaxIds();
+    tblRegistry.innerHTML="";
+    for(let id=1; id<=maxIds; id++){
+      ensureBoat(id);
+      const b=boats.get(id);
+      const laps=b.lapTimes.length;
+      const bestLap=best(b.lapTimes);
+
+      const tr=document.createElement("tr");
+      tr.innerHTML=`
+        <td class="mono">${id}</td>
+        <td><input class="nameInput" data-id="${id}" value="${escapeHtml(b.name)}"></td>
+        <td>${badge(b.colorA)}</td>
+        <td>${badge(b.colorB)}</td>
+        <td class="mono">${laps}</td>
+        <td class="mono">${mmss(bestLap)}</td>
+      `;
+      tblRegistry.appendChild(tr);
+    }
+
+    tblRegistry.querySelectorAll("input.nameInput").forEach(inp=>{
+      inp.addEventListener("input", ()=>{
+        const id=parseInt(inp.getAttribute("data-id"),10);
+        ensureBoat(id);
+        boats.get(id).name=inp.value;
+        saveBoats();
+        syncRegIdOptions();
+        renderBoard();
+        renderRace();
+      });
+    });
+
+    kpiLaps.textContent=String(totalLapsAllBoats(maxIds));
+  }
+
+  function renderBoard(){
+    const maxIds=getMaxIds();
+    const rows=[];
+    for(let id=1; id<=maxIds; id++){
+      ensureBoat(id);
+      const b=boats.get(id);
+      const laps=b.lapTimes.length;
+      if(laps===0) continue;
+      rows.push({
+        id,
+        name:getBoatName(id),
+        laps,
+        best:best(b.lapTimes),
+        avg:avg(b.lapTimes)
+      });
+    }
+    rows.sort((a,b)=> (a.best-b.best) || (b.laps-a.laps) || (a.id-b.id));
+
+    tblBoard.innerHTML="";
+    rows.forEach((r,idx)=>{
+      const tr=document.createElement("tr");
+      tr.innerHTML=`
+        <td class="mono">${idx+1}</td>
+        <td class="mono">${r.id}</td>
+        <td>${escapeHtml(r.name)}</td>
+        <td class="mono">${r.laps}</td>
+        <td class="mono">${mmss(r.best)}</td>
+        <td class="mono">${mmss(r.avg)}</td>
+      `;
+      tblBoard.appendChild(tr);
+    });
+
+    if(!rows.length){
+      const tr=document.createElement("tr");
+      tr.innerHTML=`<td colspan="6" class="small">ยังไม่มีรอบ — ไปหน้า “ลงทะเบียน” ลงสี A/B ก่อน แล้วค่อยมาเริ่มแข่ง</td>`;
+      tblBoard.appendChild(tr);
+    }
+  }
+
+  function addLogRow(rec){
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td class="mono small">${rec.iso}</td>
+      <td class="mono">${rec.id}</td>
+      <td>${escapeHtml(rec.name)}</td>
+      <td class="mono">${rec.lapNum}</td>
+      <td class="mono">${mmssms(rec.lapSec)}</td>
+    `;
+    tblLog.prepend(tr);
+  }
+
+  function renderRace(){
+    const maxIds=getMaxIds();
+    const target=getTargetLaps();
+    const allowDNF=!!allowDNFEl.checked;
+
+    lblTargetLaps.textContent=String(target);
+
+    const raceLapsById = new Map();
+    const raceLapTimesById = new Map();
+    for(let id=1; id<=maxIds; id++){
+      raceLapsById.set(id, 0);
+      raceLapTimesById.set(id, []);
+    }
+    if(race.startMs){
+      for(const rec of log){
+        const t = Date.parse(rec.iso);
+        if(isFinite(t) && t >= race.startMs){
+          raceLapsById.set(rec.id, (raceLapsById.get(rec.id)||0)+1);
+          raceLapTimesById.get(rec.id).push(rec.lapSec);
+        }
+      }
+    }
+
+    const rows=[];
+    for(let id=1; id<=maxIds; id++){
+      ensureBoat(id);
+      const b=boats.get(id);
+
+      const laps = raceLapsById.get(id)||0;
+      const arr  = raceLapTimesById.get(id)||[];
+      const bestLap = best(arr);
+      const avgLap  = avg(arr);
+      const stdevLap= stddev(arr);
+
+      const started = !!b.race.startedAtMs;
+      const finished = (laps>=target && b.race.finishedAtMs!=null);
+
+      const startMs = b.race.startedAtMs ?? race.startMs;
+      const finishMs = b.race.finishedAtMs ?? (finished? race.endMs : null);
+      let totalMs = null;
+      if(started && (finished && finishMs && startMs)) totalMs = finishMs - startMs;
+      else if(started && race.active && startMs) totalMs = Date.now() - startMs;
+
+      rows.push({
+        id,
+        name:getBoatName(id),
+        laps,
+        target,
+        finished,
+        started,
+        bestLap,
+        avgLap,
+        stdevLap,
+        totalMs
+      });
+    }
+
+    rows.sort((a,b)=>{
+      const af=a.finished?0:1, bf=b.finished?0:1;
+      if(af!==bf) return af-bf;
+      if(a.finished && b.finished){
+        const at=a.totalMs??1e18, bt=b.totalMs??1e18;
+        if(at!==bt) return at-bt;
+      }
+      if(a.laps!==b.laps) return b.laps-a.laps;
+      const ab=a.bestLap??1e18, bb=b.bestLap??1e18;
+      if(ab!==bb) return ab-bb;
+      return a.id-b.id;
+    });
+
+    const leader = rows[0];
+    const leaderTotal = leader && leader.finished ? (leader.totalMs ?? null) : null;
+
+    tblRace.innerHTML="";
+    let pos=0;
+    for(const r of rows){
+      pos++;
+      let statusText = `${r.laps}/${r.target}`;
+      const bestText = isFinite(r.bestLap)?mmssms(r.bestLap):"—";
+      const totalText = isFinite(r.totalMs)?msToClock(r.totalMs): (r.started? msToClock(Date.now()-(boats.get(r.id).race.startedAtMs ?? Date.now())) : "—");
+
+      let gapText="—";
+      if(leaderTotal!=null && r.finished && isFinite(r.totalMs)){
+        const gapMs = r.totalMs - leaderTotal;
+        gapText = (gapMs<=0) ? "—" : "+"+msToClock(gapMs);
+      } else if(r.laps>0 && leader && leader.laps>0){
+        const lapGap = leader.laps - r.laps;
+        if(lapGap>0) gapText = `-${lapGap} lap`;
+      }
+
+      const finBadge = r.finished ? `<span class="badgeOk">FIN</span>` : (r.started? `<span class="badgeBad">RUN</span>` : `<span class="small">—</span>`);
+      const tr=document.createElement("tr");
+      tr.innerHTML=`
+        <td class="mono">${pos}</td>
+        <td class="mono">${r.id}</td>
+        <td>${escapeHtml(r.name)} ${finBadge}</td>
+        <td class="mono">${statusText}</td>
+        <td class="mono">${bestText}</td>
+        <td class="mono">${(r.finished||race.active||allowDNF) ? totalText : "—"}</td>
+        <td class="mono">${gapText}</td>
+      `;
+      tblRace.appendChild(tr);
+    }
+
+    if(!rows.length){
+      const tr=document.createElement("tr");
+      tr.innerHTML=`<td colspan="7" class="small">ไม่มีข้อมูล</td>`;
+      tblRace.appendChild(tr);
+    }
+
+    setRaceTag();
+  }
+
+  // ---------------- CSV ----------------
+  function exportCSV(){
+    const header="timestamp_iso,boat_id,name,lap_number,lap_time_sec,lap_time_mmss,direction\n";
+    const rows=log.map(x =>
+      `${x.iso},${x.id},"${(x.name||"").replaceAll('"','""')}",${x.lapNum},${x.lapSec.toFixed(3)},${mmssms(x.lapSec)},${x.dir}`
+    ).join("\n");
+    const blob=new Blob([header+rows+"\n"], {type:"text/csv;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download="rc_lap_log.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ---------------- Color math ----------------
+  function rgbToHsv(r,g,b){
+    r/=255; g/=255; b/=255;
+    const max=Math.max(r,g,b), min=Math.min(r,g,b);
+    const d=max-min;
+    let h=0;
+    if(d!==0){
+      if(max===r) h=((g-b)/d)%6;
+      else if(max===g) h=(b-r)/d+2;
+      else h=(r-g)/d+4;
+      h*=60; if(h<0) h+=360;
+    }
+    const s=max===0?0:d/max;
+    const v=max;
+    return {h, s:Math.round(s*255), v:Math.round(v*255)};
+  }
+  function hueDist(a,b){
+    let d=Math.abs(a-b);
+    if(d>180) d=360-d;
+    return d;
+  }
+  function circularStats(hues){
+    let sumSin=0, sumCos=0;
+    for(const h of hues){
+      const rad=h*Math.PI/180;
+      sumCos+=Math.cos(rad);
+      sumSin+=Math.sin(rad);
+    }
+    let meanRad=Math.atan2(sumSin,sumCos);
+    let meanH=meanRad*180/Math.PI;
+    if(meanH<0) meanH+=360;
+
+    let devSum=0;
+    for(const h of hues){
+      const d=hueDist(h,meanH);
+      devSum+=d*d;
+    }
+    const std=Math.sqrt(devSum/hues.length);
+    return {meanH, std};
+  }
+
+  function sampleBoxHSV(box, canvasCtx){
+    const [x1,y1,x2,y2]=box;
+    const sx=Math.max(0, Math.min(x1,x2));
+    const sy=Math.max(0, Math.min(y1,y2));
+    const ex=Math.min(W-1, Math.max(x1,x2));
+    const ey=Math.min(H-1, Math.max(y1,y2));
+    const w=ex-sx+1, h=ey-sy+1;
+    if(w<=2 || h<=2) return null;
+
+    const img=canvasCtx.getImageData(sx,sy,w,h).data;
+
+    const sGate=Math.max(10, +sMinEl.value - 15);
+    const vGate=Math.max(10, +vMinEl.value - 15);
+
+    const hues=[];
+    let sMinSeen=255, vMinSeen=255;
+
+    for(let i=0;i<img.length;i+=4){
+      const hsv=rgbToHsv(img[i],img[i+1],img[i+2]);
+      sMinSeen=Math.min(sMinSeen,hsv.s);
+      vMinSeen=Math.min(vMinSeen,hsv.v);
+      if(hsv.s>=sGate && hsv.v>=vGate){
+        hues.push(hsv.h);
+      }
+    }
+    if(hues.length<40) return null;
+
+    const st=circularStats(hues);
+    return {
+      hMean: st.meanH,
+      hStd: st.std,
+      sMin: sMinSeen,
+      vMin: vMinSeen,
+      count: hues.length
+    };
+  }
+
+  function computeSignatureFromSamples(samples){
+    const hues=[];
+    for(const s of samples){
+      const w=Math.min(200, Math.max(10, s.count|0));
+      for(let i=0;i<w;i++) hues.push(s.hMean);
+    }
+    const st=circularStats(hues);
+    const avgStd = samples.reduce((a,c)=>a+c.hStd,0)/samples.length;
+    const std = Math.max(st.std, avgStd);
+
+    const sMinSeen = samples.reduce((m,c)=>Math.min(m,c.sMin), 255);
+    const vMinSeen = samples.reduce((m,c)=>Math.min(m,c.vMin), 255);
+
+    return {hMean: st.meanH, hStd: std, sMin: sMinSeen, vMin: vMinSeen};
+  }
+
+  // ---------------- Masks ----------------
+  function buildColorMaskForSignature(frameData, sig, gateX, zone){
+    const targetH=sig.h;
+    const tol=sig.tol;
+    const sMin=sig.sMin;
+    const vMin=sig.vMin;
+
+    const mask=new Uint8ClampedArray(W*H);
+    const {rx1,ry1,rx2,ry2}=roiBounds();
+    const xLeft=Math.max(rx1, gateX-zone*3);
+    const xRight=Math.min(rx2, gateX+zone*3);
+
+    for(let y=ry1;y<=ry2;y++){
+      let p=(y*W + xLeft)*4;
+      for(let x=xLeft;x<=xRight;x++){
+        const hsv=rgbToHsv(frameData[p],frameData[p+1],frameData[p+2]);
+        if(hsv.s>=sMin && hsv.v>=vMin && hueDist(hsv.h,targetH)<=tol){
+          mask[y*W+x]=255;
+        }
+        p+=4;
+      }
+    }
+
+    const out=new Uint8ClampedArray(W*H);
+    for(let y=ry1+1;y<ry2-1;y++){
+      for(let x=xLeft+1;x<xRight-1;x++){
+        const i=y*W+x;
+        const v=
+          mask[i] | mask[i-1] | mask[i+1] |
+          mask[i-W] | mask[i+W] |
+          mask[i-W-1] | mask[i-W+1] |
+          mask[i+W-1] | mask[i+W+1];
+        out[i]=v?255:0;
+      }
+    }
+    return out;
+  }
+
+  function buildMotionMask(gray, prev, diffTh, gateX, zone){
+    const mask=new Uint8ClampedArray(W*H);
+    const {rx1,ry1,rx2,ry2}=roiBounds();
+    const xLeft=Math.max(rx1, gateX-zone*3);
+    const xRight=Math.min(rx2, gateX+zone*3);
+
+    for(let y=ry1;y<=ry2;y++){
+      let idx=y*W+xLeft;
+      for(let x=xLeft;x<=xRight;x++,idx++){
+        const d=Math.abs(gray[idx]-prev[idx]);
+        if(d>=diffTh) mask[idx]=255;
+      }
+    }
+    const out=new Uint8ClampedArray(W*H);
+    for(let y=ry1+1;y<ry2-1;y++){
+      for(let x=xLeft+1;x<xRight-1;x++){
+        const i=y*W+x;
+        const v=
+          mask[i] | mask[i-1] | mask[i+1] |
+          mask[i-W] | mask[i+W] |
+          mask[i-W-1] | mask[i-W+1] |
+          mask[i+W-1] | mask[i+W+1];
+        out[i]=v?255:0;
+      }
+    }
+    return out;
+  }
+
+  function findBlobs(mask, minArea){
+    const blobs=[];
+    const visited=new Uint8Array(W*H);
+    const {rx1,ry1,rx2,ry2}=roiBounds();
+    const stack=[];
+
+    for(let y=ry1;y<=ry2;y++){
+      let idx=y*W+rx1;
+      for(let x=rx1;x<=rx2;x++,idx++){
+        if(mask[idx]!==255 || visited[idx]) continue;
+
+        let minX=x,maxX=x,minY=y,maxY=y, area=0, sumX=0,sumY=0;
+        stack.length=0; stack.push(idx); visited[idx]=1;
+
+        while(stack.length){
+          const p=stack.pop();
+          const py=(p/W)|0;
+          const px=p - py*W;
+
+          area++; sumX+=px; sumY+=py;
+          if(px<minX)minX=px; if(px>maxX)maxX=px;
+          if(py<minY)minY=py; if(py>maxY)maxY=py;
+
+          const n1=p-1,n2=p+1,n3=p-W,n4=p+W;
+          if(px>rx1 && !visited[n1] && mask[n1]===255){visited[n1]=1; stack.push(n1);}
+          if(px<rx2 && !visited[n2] && mask[n2]===255){visited[n2]=1; stack.push(n2);}
+          if(py>ry1 && !visited[n3] && mask[n3]===255){visited[n3]=1; stack.push(n3);}
+          if(py<ry2 && !visited[n4] && mask[n4]===255){visited[n4]=1; stack.push(n4);}
+        }
+
+        if(area>=minArea){
+          blobs.push({cx:sumX/area, cy:sumY/area, area, minX,minY,maxX,maxY});
+        }
+      }
+    }
+    return blobs;
+  }
+
+  function mergeCloseDetections(dets, distTh){
+    if(dets.length<=1) return dets;
+    const used=new Array(dets.length).fill(false);
+    const out=[];
+    for(let i=0;i<dets.length;i++){
+      if(used[i]) continue;
+      let acc={...dets[i]};
+      let count=1;
+      used[i]=true;
+      for(let j=i+1;j<dets.length;j++){
+        if(used[j]) continue;
+        const dx=dets[j].cx-acc.cx, dy=dets[j].cy-acc.cy;
+        if(Math.hypot(dx,dy)<=distTh){
+          acc.cx=(acc.cx*count+dets[j].cx)/(count+1);
+          acc.cy=(acc.cy*count+dets[j].cy)/(count+1);
+          acc.area+=dets[j].area;
+          acc.minX=Math.min(acc.minX,dets[j].minX);
+          acc.minY=Math.min(acc.minY,dets[j].minY);
+          acc.maxX=Math.max(acc.maxX,dets[j].maxX);
+          acc.maxY=Math.max(acc.maxY,dets[j].maxY);
+          count++; used[j]=true;
+        }
+      }
+      out.push(acc);
+    }
+    return out;
+  }
+
+  // ---------------- Detection: AND mode ----------------
+  function detectByRegisteredColors(frameData){
+    const gateX=+gateXEl.value;
+    const zone=+zoneEl.value;
+    const maxIds=getMaxIds();
+
+    const globalAreaMin=+minColorAreaEl.value;
+    const pairDist = clamp(zone*2.6 + 30, 45, 140);
+
+    let all=[];
+    for(let id=1; id<=maxIds; id++){
+      ensureBoat(id);
+      const b=boats.get(id);
+
+      const hasA=!!b.colorA;
+      const hasB=!!b.colorB;
+
+      if(hasA && hasB){
+        const areaMin = Math.min(globalAreaMin, b.colorA.areaMin||globalAreaMin, b.colorB.areaMin||globalAreaMin);
+
+        const maskA = buildColorMaskForSignature(frameData, b.colorA, gateX, zone);
+        const maskB = buildColorMaskForSignature(frameData, b.colorB, gateX, zone);
+
+        let blobsA = findBlobs(maskA, areaMin);
+        let blobsB = findBlobs(maskB, areaMin);
+
+        blobsA.sort((a,b)=>b.area-a.area);
+        blobsB.sort((a,b)=>b.area-a.area);
+        blobsA = blobsA.slice(0,4);
+        blobsB = blobsB.slice(0,4);
+
+        const usedB = new Array(blobsB.length).fill(false);
+        const pairs = [];
+
+        for(let i=0;i<blobsA.length;i++){
+          let bestJ=-1, bestD=1e9;
+          for(let j=0;j<blobsB.length;j++){
+            if(usedB[j]) continue;
+            const dx=blobsB[j].cx - blobsA[i].cx;
+            const dy=blobsB[j].cy - blobsA[i].cy;
+            const d=Math.hypot(dx,dy);
+            if(d<bestD){bestD=d; bestJ=j;}
+          }
+          if(bestJ!==-1 && bestD<=pairDist){
+            usedB[bestJ]=true;
+            const A=blobsA[i], B=blobsB[bestJ];
+            pairs.push({
+              cx:(A.cx+B.cx)/2,
+              cy:(A.cy+B.cy)/2,
+              area:A.area+B.area,
+              minX:Math.min(A.minX,B.minX),
+              minY:Math.min(A.minY,B.minY),
+              maxX:Math.max(A.maxX,B.maxX),
+              maxY:Math.max(A.maxY,B.maxY),
+              idHint:id
+            });
+          }
+        }
+
+        pairs.sort((a,b)=>b.area-a.area);
+        all = all.concat(pairs.slice(0,2));
+        continue;
+      }
+
+      if(hasA || hasB){
+        const sig = hasA ? b.colorA : b.colorB;
+        const areaMin = Math.min(globalAreaMin, sig.areaMin||globalAreaMin);
+        const mask = buildColorMaskForSignature(frameData, sig, gateX, zone);
+        let blobs = findBlobs(mask, areaMin);
+        blobs.sort((a,b)=>b.area-a.area);
+        blobs = blobs.slice(0,3).map(bb=>({...bb, idHint:id}));
+        blobs = mergeCloseDetections(blobs, 18);
+        all = all.concat(blobs);
+      }
+    }
+    return all;
+  }
+
+  // ---------------- Tracking ----------------
+  function assignDetectionsToRegistry(detections){
+    const maxIds=getMaxIds();
+    const assignDist=+assignDistEl.value;
+    const maxGap=+maxGapEl.value;
+
+    for(const t of tracks.values()){
+      t.x += t.vx*0.6; t.y += t.vy*0.6;
+      t.missed++;
+    }
+
+    const usedDet=new Array(detections.length).fill(false);
+
+    for(let j=0;j<detections.length;j++){
+      const d=detections[j];
+      if(!d.idHint) continue;
+      const id=d.idHint;
+      if(id<1||id>maxIds) continue;
+
+      if(tracks.has(id)){
+        const t=tracks.get(id);
+        const nvx=d.cx-t.x, nvy=d.cy-t.y;
+        t.vx=0.7*t.vx+0.3*nvx;
+        t.vy=0.7*t.vy+0.3*nvy;
+        t.x=d.cx; t.y=d.cy;
+        t.bbox=d;
+        t.missed=0;
+      }else{
+        tracks.set(id,{id,x:d.cx,y:d.cy,vx:0,vy:0,missed:0,bbox:d,side:null});
+      }
+      usedDet[j]=true;
+    }
+
+    for(const [id,t] of tracks.entries()){
+      if(id>maxIds) continue;
+      if(t.missed===0) continue;
+
+      let bestJ=-1, bestD=1e9;
+      for(let j=0;j<detections.length;j++){
+        if(usedDet[j]) continue;
+        const d=detections[j];
+        const dist=Math.hypot(d.cx-t.x, d.cy-t.y);
+        if(dist<bestD){bestD=dist; bestJ=j;}
+      }
+      if(bestJ!==-1 && bestD<=assignDist){
+        const d=detections[bestJ];
+        usedDet[bestJ]=true;
+        const nvx=d.cx-t.x, nvy=d.cy-t.y;
+        t.vx=0.7*t.vx+0.3*nvx;
+        t.vy=0.7*t.vy+0.3*nvy;
+        t.x=d.cx; t.y=d.cy;
+        t.bbox=d;
+        t.missed=0;
+      }
+    }
+
+    for(const [id,t] of tracks.entries()){
+      if(id>maxIds || t.missed>maxGap) tracks.delete(id);
+    }
+  }
+
+  // ---------------- Race / Lap logic ----------------
+  function checkCrossings(){
+    const gateX=+gateXEl.value;
+    const cooldown=+cooldownEl.value;
+    const dir=directionEl.value;
+    const tSec=nowSec();
+    const maxIds=getMaxIds();
+    const target=getTargetLaps();
+
+    for(const t of tracks.values()){
+      if(t.id<1 || t.id>maxIds) continue;
+
+      const curSide = (t.x<gateX) ? "L":"R";
+      if(t.side===null) t.side=curSide;
+      else if(t.side!==curSide){
+        const okDir =
+          (dir==="L2R" && t.side==="L" && curSide==="R") ||
+          (dir==="R2L" && t.side==="R" && curSide==="L");
+
+        if(okDir){
+          ensureBoat(t.id);
+          const b=boats.get(t.id);
+          if(tSec - (b.lastTriggerSec ?? -999) >= cooldown){
+            b.lastTriggerSec=tSec;
+
+            const nowMs=Date.now();
+
+            if(race.active && !b.race.startedAtMs){
+              b.race.startedAtMs = nowMs;
+              b.lastLapTsMs = nowMs;
+              kpiLast.textContent = `${getBoatName(t.id)} started`;
+              saveBoats();
+              renderRace();
+            } else {
+              if(b.lastLapTsMs===null){
+                b.lastLapTsMs=nowMs;
+                kpiLast.textContent=`${getBoatName(t.id)} start`;
+              }else{
+                const lapSec=(nowMs-b.lastLapTsMs)/1000;
+                b.lastLapTsMs=nowMs;
+                b.lapTimes.push(lapSec);
+                saveBoats();
+
+                const iso=new Date(nowMs).toISOString();
+                const name=getBoatName(t.id);
+                const lapNum=b.lapTimes.length;
+                log.push({iso,id:t.id,name,lapNum,lapSec,dir});
+                addLogRow({iso,id:t.id,name,lapNum,lapSec});
+                kpiLast.textContent=`${name} Lap#${lapNum} ${mmssms(lapSec)}`;
+                renderRegistry();
+                renderBoard();
+
+                if(race.active){
+                  const raceLapCount = countRaceLapsForIdSinceStart(t.id);
+                  if(raceLapCount >= target && !b.race.finishedAtMs){
+                    b.race.finishedAtMs = nowMs;
+                    race.finishedOrder.push({id:t.id, finishMs:nowMs});
+                    saveBoats();
+
+                    if(!race.winnerId){
+                      race.winnerId = t.id;
+                      if(autoEndRaceEl.checked){
+                        endRace("Auto End (Winner)");
+                      } else {
+                        renderRace();
+                        computeRaceAwardsAndAnnounce("Winner detected (race still running)");
+                      }
+                    } else {
+                      renderRace();
+                    }
+                  } else {
+                    renderRace();
+                  }
+                }
+              }
+            }
+          }
+        }
+        t.side=curSide;
+      }
+    }
+
+    kpiTracks.textContent=String(tracks.size);
+    kpiLaps.textContent=String(totalLapsAllBoats(getMaxIds()));
+  }
+
+  function countRaceLapsForIdSinceStart(id){
+    if(!race.startMs) return 0;
+    let c=0;
+    for(const rec of log){
+      if(rec.id!==id) continue;
+      const t = Date.parse(rec.iso);
+      if(isFinite(t) && t >= race.startMs) c++;
+    }
+    return c;
+  }
+
+  // ---------------- DRAW overlay (Race) ----------------
+  function drawOverlayRace(){
+    const gateX=+gateXEl.value;
+    const zone=+zoneEl.value;
+
+    ctx.save();
+    ctx.fillStyle="rgba(255,230,0,0.08)";
+    ctx.fillRect(Math.max(0, gateX-zone), 0, Math.min(W, gateX+zone)-Math.max(0, gateX-zone), H);
+    ctx.strokeStyle="yellow";
+    ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(gateX,0); ctx.lineTo(gateX,H); ctx.stroke();
+
+    if(roi){
+      const [x1,y1,x2,y2]=roi;
+      ctx.strokeStyle="rgba(0,200,255,0.9)";
+      ctx.lineWidth=2;
+      ctx.strokeRect(Math.min(x1,x2), Math.min(y1,y2), Math.abs(x2-x1), Math.abs(y2-y1));
+      ctx.fillStyle="rgba(0,200,255,0.08)";
+      ctx.fillRect(Math.min(x1,x2), Math.min(y1,y2), Math.abs(x2-x1), Math.abs(y2-y1));
+    }
+
+    for(const t of tracks.values()){
+      const d=t.bbox;
+      if(d){
+        ctx.strokeStyle="rgba(0,255,120,0.9)";
+        ctx.lineWidth=2;
+        ctx.strokeRect(d.minX,d.minY,d.maxX-d.minX+1,d.maxY-d.minY+1);
+      }
+      ctx.fillStyle="rgba(0,255,120,0.9)";
+      ctx.beginPath(); ctx.arc(t.x,t.y,4,0,Math.PI*2); ctx.fill();
+
+      ctx.fillStyle="rgba(0,0,0,0.6)";
+      ctx.fillRect(t.x+6,t.y-18,300,20);
+      ctx.fillStyle="white";
+      ctx.font="12px system-ui";
+      const b=boats.get(t.id);
+      const a=b?.colorA?`A:H${b.colorA.h.toFixed(0)}`:"A:—";
+      const c=b?.colorB?`B:H${b.colorB.h.toFixed(0)}`:"B:—";
+      const r = (b?.race?.finishedAtMs) ? " FIN" : (b?.race?.startedAtMs ? " RUN" : "");
+      ctx.fillText(`${getBoatName(t.id)} (ID ${t.id}) • ${a} ${c}${r}`, t.x+10, t.y-4);
+    }
+
+    ctx.fillStyle="rgba(0,0,0,0.45)";
+    ctx.fillRect(10,10,620,48);
+    ctx.fillStyle="white";
+    ctx.font="13px system-ui";
+    const dir=directionEl.value==="L2R"?"ซ้าย→ขวา":"ขวา→ซ้าย";
+    ctx.fillText(`${modeTag.textContent} | Dir: ${dir} | Max IDs: ${getMaxIds()}`, 18, 30);
+    ctx.fillText(`${raceStateTag.textContent} | Target: ${getTargetLaps()} | Clock: ${lblRaceClock.textContent}`, 18, 50);
+
+    ctx.restore();
+  }
+
+  // ---------------- DRAW overlay (Register) (NEW) ----------------
+  function drawOverlayReg(){
+    ctxReg.save();
+
+    // show message if no stream
+    if(!stream){
+      ctxReg.fillStyle="rgba(0,0,0,0.65)";
+      ctxReg.fillRect(0,0,W,H);
+      ctxReg.fillStyle="white";
+      ctxReg.font="18px system-ui";
+      ctxReg.fillText("ยังไม่เริ่มกล้อง", 20, 40);
+      ctxReg.font="14px system-ui";
+      ctxReg.fillText("ไปหน้า “แข่งขัน” แล้วกด เริ่มกล้อง ก่อนนะ", 20, 66);
+      ctxReg.restore();
+      return;
+    }
+
+    // draw reg box & clicks
+    if(regMode){
+      ctxReg.fillStyle="rgba(0,0,0,0.35)";
+      ctxReg.fillRect(10,10,420,44);
+      ctxReg.fillStyle="white";
+      ctxReg.font="13px system-ui";
+      ctxReg.fillText(`REG MODE • ID ${regIdEl.value} • Slot ${regSlot} • คลิก 2 จุดเพื่อครอบสี`, 18, 30);
+
+      // click points
+      ctxReg.fillStyle="rgba(179,136,255,0.95)";
+      for(const [x,y] of regClicks){
+        ctxReg.beginPath(); ctxReg.arc(x,y,5,0,Math.PI*2); ctxReg.fill();
+      }
+
+      // regBox
+      if(regBox){
+        const [x1,y1,x2,y2]=regBox;
+        const rx=Math.min(x1,x2), ry=Math.min(y1,y2);
+        const rw=Math.abs(x2-x1), rh=Math.abs(y2-y1);
+        ctxReg.strokeStyle="rgba(179,136,255,0.95)";
+        ctxReg.lineWidth=3;
+        ctxReg.strokeRect(rx,ry,rw,rh);
+        ctxReg.fillStyle="rgba(179,136,255,0.10)";
+        ctxReg.fillRect(rx,ry,rw,rh);
+      }
+    } else {
+      ctxReg.fillStyle="rgba(0,0,0,0.35)";
+      ctxReg.fillRect(10,10,520,44);
+      ctxReg.fillStyle="white";
+      ctxReg.font="13px system-ui";
+      ctxReg.fillText(`Register: กด “เริ่ม REG” แล้วคลิก 2 จุดเพื่อครอบสี (Slot ${regSlot})`, 18, 30);
+    }
+
+    ctxReg.restore();
+  }
+
+  // ---------------- LOOP ----------------
+  function tick(){
+    if(!stream) {
+      // still refresh register canvas with message (smooth)
+      ctxReg.clearRect(0,0,W,H);
+      drawOverlayReg();
+      rafId=requestAnimationFrame(tick);
+      return;
+    }
+
+    if(!paused){
+      // draw to both canvases
+      ctx.drawImage(video,0,0,W,H);
+      ctxReg.drawImage(video,0,0,W,H);
+
+      const frame=ctx.getImageData(0,0,W,H);
+      const data=frame.data;
+
+      let detections=[];
+
+      if(useColorEl.checked){
+        detections = detections.concat(detectByRegisteredColors(data));
+      }
+
+      if(useMotionEl.checked){
+        const gray=new Uint8ClampedArray(W*H);
+        for(let i=0,p=0;i<data.length;i+=4,p++){
+          gray[p]=(data[i]*0.299 + data[i+1]*0.587 + data[i+2]*0.114)|0;
+        }
+        if(!hasPrev){
+          prevGray.set(gray); hasPrev=true;
+        } else {
+          const gateX=+gateXEl.value;
+          const zone=+zoneEl.value;
+          const diffTh=+diffThEl.value;
+          const minArea=+minAreaEl.value;
+          const motionMask=buildMotionMask(gray, prevGray, diffTh, gateX, zone);
+          const blobs=findBlobs(motionMask, minArea).slice(0,4).map(b=>({...b,idHint:null}));
+          detections = detections.concat(blobs);
+          prevGray.set(gray);
+        }
+      } else {
+        hasPrev=false;
+      }
+
+      detections = mergeCloseDetections(detections, 18);
+      assignDetectionsToRegistry(detections);
+      checkCrossings();
+
+      drawOverlayRace();
+      drawOverlayReg();
+
+      if(race.active) updateRaceClockUI();
+    } else {
+      drawOverlayRace();
+      drawOverlayReg();
+      ctx.save();
+      ctx.fillStyle="rgba(0,0,0,0.55)";
+      ctx.fillRect(0,0,W,H);
+      ctx.fillStyle="white";
+      ctx.font="28px system-ui";
+      ctx.fillText("PAUSED", 20, 44);
+      ctx.restore();
+    }
+
+    fpsFrames++;
+    const t=performance.now();
+    if(t-lastFpsT>=600){
+      const fps=fpsFrames*1000/(t-lastFpsT);
+      lblFps.textContent=`FPS: ${fps.toFixed(1)}`;
+      lastFpsT=t; fpsFrames=0;
+    }
+
+    rafId=requestAnimationFrame(tick);
+  }
+
+  // ---------------- CAMERA ----------------
+  async function start(){
+    stop();
+    paused=false;
+    const facingMode=selFacing.value;
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{facingMode, width:{ideal:1280}, height:{ideal:720}},
+      audio:false
+    });
+    video.srcObject=stream;
+    await video.play();
+    hasPrev=false;
+    rafId=requestAnimationFrame(tick);
+  }
+
+  function stop(){
+    if(rafId) cancelAnimationFrame(rafId);
+    rafId=null;
+    if(stream){
+      stream.getTracks().forEach(t=>t.stop());
+      stream=null;
+    }
+    // clear reg canvas
+    ctxReg.clearRect(0,0,W,H);
+    drawOverlayReg();
+  }
+
+  function resetRun(){
+    tracks.clear();
+    log.length=0;
+    tblLog.innerHTML="";
+    kpiTracks.textContent="0";
+    kpiLast.textContent="--";
+    hasPrev=false;
+
+    const maxIds=getMaxIds();
+    for(let id=1; id<=maxIds; id++){
+      ensureBoat(id);
+      boats.get(id).lastLapTsMs=null;
+      boats.get(id).lastTriggerSec=-999;
+    }
+    saveBoats();
+    renderRegistry();
+    renderBoard();
+    renderRace();
+    updateRaceClockUI();
+  }
+
+  // ---------------- ROI selection ----------------
+  btnSetROI.addEventListener('click', ()=>{
+    settingROI=true; roiClicks=[];
+    btnSetROI.textContent="คลิก 2 จุด...";
+  });
+  btnClearROI.addEventListener('click', ()=>{
+    roi=null; settingROI=false; roiClicks=[];
+    btnSetROI.textContent="ตั้ง ROI (คลิก 2 จุด)";
+    scheduleSave();
+  });
+
+  // ---------------- Register logic ----------------
+  function syncRegIdOptions(){
+    const maxIds=getMaxIds();
+    const current=parseInt(regIdEl.value||"1",10);
+    regIdEl.innerHTML="";
+    for(let id=1; id<=maxIds; id++){
+      ensureBoat(id);
+      const opt=document.createElement("option");
+      opt.value=String(id);
+      opt.textContent=`ID ${id} — ${getBoatName(id)}`;
+      regIdEl.appendChild(opt);
+    }
+    regIdEl.value=String(clamp(current,1,maxIds));
+  }
+
+  function setRegState(t){ lblRegState.textContent=t; }
+
+  function setSlot(slot){
+    regSlot=slot;
+    btnSlotA.classList.toggle("active", slot==="A");
+    btnSlotB.classList.toggle("active", slot==="B");
+    sampleBuf=[];
+    lastComputed=null;
+    regClicks=[];
+    regBox=null;
+    lblSample.textContent="Sample: --";
+    btnRegCapture.disabled=!regMode || !regBox;
+    btnRegSave.disabled=true;
+  }
+
+  function startReg(){
+    if(!stream){
+      alert("ยังไม่เริ่มกล้องนะ ไปหน้า “แข่งขัน” กดเริ่มกล้องก่อน 🙂");
+      return;
+    }
+    regMode=true;
+    regClicks=[];
+    regBox=null;
+    sampleBuf=[];
+    lastComputed=null;
+    btnRegCapture.disabled=true;
+    btnRegSave.disabled=true;
+    setRegState("CLICK 2 POINTS");
+    lblSample.textContent=`Sample: 0/${regFramesEl.value}`;
+  }
+
+  async function captureMultiSamples(){
+    if(!regBox) return;
+    const target = parseInt(regFramesEl.value,10) || 5;
+    btnRegCapture.disabled=true;
+    btnRegSave.disabled=true;
+    setRegState("CAPTURING...");
+
+    sampleBuf=[];
+    for(let i=0;i<target;i++){
+      await new Promise(r=>setTimeout(r, 120));
+      // IMPORTANT: sample from REG canvas (so user sees same)
+      const s = sampleBoxHSV(regBox, ctxReg);
+      if(s) sampleBuf.push(s);
+      lblSample.textContent=`Sample: ${sampleBuf.length}/${target}`;
+    }
+
+    if(sampleBuf.length<Math.min(3,target)){
+      setRegState("CAPTURE FAIL");
+      btnRegCapture.disabled=false;
+      return;
+    }
+
+    lastComputed = computeSignatureFromSamples(sampleBuf);
+
+    const autoTol = !!regAutoTolEl.checked;
+    const globalTol = +hsvTolEl.value;
+    const tol = autoTol ? clamp(lastComputed.hStd*2.2 + 8, 8, 80) : globalTol;
+
+    setRegState(`CAPTURE OK`);
+    lblSample.textContent = `Sample: ${sampleBuf.length}/${target} • H=${lastComputed.hMean.toFixed(1)} • std=${lastComputed.hStd.toFixed(1)} • tol≈${tol.toFixed(0)}`;
+    btnRegSave.disabled=false;
+  }
+
+  function saveRegSignature(){
+    const id=parseInt(regIdEl.value,10);
+    ensureBoat(id);
+    if(!lastComputed) return;
+
+    const autoTol=!!regAutoTolEl.checked;
+    const globalTol=+hsvTolEl.value;
+    const tol = autoTol ? clamp(lastComputed.hStd*2.2 + 8, 8, 80) : globalTol;
+
+    const sMinGlobal=+sMinEl.value;
+    const vMinGlobal=+vMinEl.value;
+    const sMin = clamp(Math.min(sMinGlobal, lastComputed.sMin + 10), 0, 255);
+    const vMin = clamp(Math.min(vMinGlobal, lastComputed.vMin + 10), 0, 255);
+
+    const areaMin = +minColorAreaEl.value;
+
+    const sig = {h:lastComputed.hMean, tol, sMin, vMin, areaMin};
+
+    const b=boats.get(id);
+    if(regSlot==="A") b.colorA=sig;
+    else b.colorB=sig;
+
+    saveBoats();
+    renderRegistry();
+    renderBoard();
+    renderRace();
+    syncRegIdOptions();
+
+    setRegState(`SAVED ID ${id} SLOT ${regSlot}`);
+    setTimeout(()=>setRegState("READY"), 900);
+
+    // keep regMode on (สะดวกลงต่อ) แต่ล้างกรอบ
+    regClicks=[]; regBox=null; sampleBuf=[]; lastComputed=null;
+    btnRegCapture.disabled=true;
+    btnRegSave.disabled=true;
+    lblSample.textContent=`Sample: 0/${regFramesEl.value}`;
+  }
+
+  function clearRegSlot(){
+    const id=parseInt(regIdEl.value,10);
+    ensureBoat(id);
+    const b=boats.get(id);
+    if(regSlot==="A") b.colorA=null;
+    else b.colorB=null;
+    saveBoats();
+    renderRegistry();
+    renderBoard();
+    renderRace();
+    setRegState(`CLEARED ID ${id} SLOT ${regSlot}`);
+    setTimeout(()=>setRegState("READY"), 900);
+  }
+
+  // ---------------- Click handler ----------------
+  // Race canvas click = ROI
+  view.addEventListener('click', (e)=>{
+    const rect=view.getBoundingClientRect();
+    const x=(e.clientX-rect.left)*(W/rect.width);
+    const y=(e.clientY-rect.top)*(H/rect.height);
+    const xi=x|0, yi=y|0;
+
+    if(settingROI){
+      roiClicks.push([xi,yi]);
+      if(roiClicks.length===2){
+        roi=[roiClicks[0][0],roiClicks[0][1],roiClicks[1][0],roiClicks[1][1]];
+        settingROI=false; roiClicks=[];
+        btnSetROI.textContent="ตั้ง ROI (คลิก 2 จุด)";
+        scheduleSave();
+      }
+    }
+  });
+
+  // Register canvas click = regBox selection
+  viewReg.addEventListener('click', (e)=>{
+    if(!regMode) return;
+    const rect=viewReg.getBoundingClientRect();
+    const x=(e.clientX-rect.left)*(W/rect.width);
+    const y=(e.clientY-rect.top)*(H/rect.height);
+    const xi=x|0, yi=y|0;
+
+    regClicks.push([xi,yi]);
+    if(regClicks.length===2){
+      regBox=[regClicks[0][0],regClicks[0][1],regClicks[1][0],regClicks[1][1]];
+      regClicks=[];
+      sampleBuf=[]; lastComputed=null;
+      lblSample.textContent=`Sample: 0/${regFramesEl.value}`;
+      setRegState("BOX OK → CAPTURE");
+      btnRegCapture.disabled=false;
+      btnRegSave.disabled=true;
+    } else {
+      setRegState("CLICK 2 POINTS");
+    }
+  });
+
+  // ---------------- Buttons ----------------
+  btnStart.addEventListener('click', async ()=>{
+    try{ await start(); }
+    catch(e){
+      alert("เปิดกล้องไม่สำเร็จ: "+e.message+"\n\nแนะนำ: ใช้ Chrome/Edge และต้องเป็น HTTPS");
+      console.error(e);
+    }
+  });
+  btnStop.addEventListener('click', stop);
+  btnResetRun.addEventListener('click', resetRun);
+
+  btnExport.addEventListener('click', exportCSV);
+  btnClearLog.addEventListener('click', ()=>{
+    log.length=0; tblLog.innerHTML=""; flash("Log cleared");
+    renderRace();
+  });
+
+  btnPresetBoat.addEventListener('click', ()=>{
+    applySettings(PRESET_BOAT, {doFlash:false});
+    saveSettings();
+    flash("Preset เรือ ✓");
+  });
+  btnPresetCar.addEventListener('click', ()=>{
+    applySettings(PRESET_CAR, {doFlash:false});
+    saveSettings();
+    flash("Preset รถ ✓");
+  });
+
+  btnSave.addEventListener('click', saveSettings);
+  btnDefaults.addEventListener('click', resetSettings);
+
+  btnSlotA.addEventListener('click', ()=>setSlot("A"));
+  btnSlotB.addEventListener('click', ()=>setSlot("B"));
+  btnRegStart.addEventListener('click', ()=>startReg());
+  btnRegCapture.addEventListener('click', ()=>captureMultiSamples());
+  btnRegSave.addEventListener('click', ()=>saveRegSignature());
+  btnRegClear.addEventListener('click', ()=>clearRegSlot());
+
+  btnResetNames.addEventListener('click', ()=>{
+    const maxIds=getMaxIds();
+    for(let id=1; id<=maxIds; id++){
+      ensureBoat(id);
+      boats.get(id).name=`Boat ${id}`;
+    }
+    saveBoats();
+    renderRegistry();
+    syncRegIdOptions();
+    renderBoard();
+    renderRace();
+    flash("Names reset ✓");
+  });
+
+  btnWipeRegistry.addEventListener('click', ()=>{
+    if(!confirm("ล้าง Registry สีทั้งหมด? (ชื่อไม่ลบ)")) return;
+    const maxIds=getMaxIds();
+    for(let id=1; id<=maxIds; id++){
+      ensureBoat(id);
+      boats.get(id).colorA=null;
+      boats.get(id).colorB=null;
+    }
+    saveBoats();
+    renderRegistry();
+    renderBoard();
+    renderRace();
+    flash("Registry wiped ✓");
+  });
+
+  btnRaceStart.addEventListener('click', ()=>{
+    if(!stream){
+      alert("เริ่มกล้องก่อนนะ (Start Camera) — ไม่งั้นมันจะแข่งกับอากาศ 😅");
+      return;
+    }
+    startRace();
+  });
+  btnRaceEnd.addEventListener('click', ()=>{
+    endRace("Manual End");
+  });
+  btnRaceReset.addEventListener('click', ()=>{
+    resetRaceState({keepAllTimeLaps:true});
+  });
+
+  // ---------------- Auto-save debounce ----------------
+  let saveTimer=null;
+  function scheduleSave(){
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(()=>{ saveSettings(); }, 350);
+  }
+
+  function onSettingChange(){
+    updateLabels();
+    enforceMaxIds();
+    renderRegistry();
+    renderBoard();
+    renderRace();
+    scheduleSave();
+  }
+
+  maxIdsEl.addEventListener('input', ()=>updateLabels());
+  maxIdsEl.addEventListener('change', ()=>{
+    maxIdsEl.value = String(getMaxIds());
+    onSettingChange();
+  });
+  maxIdsEl.addEventListener('blur', ()=>{
+    maxIdsEl.value = String(getMaxIds());
+    onSettingChange();
+  });
+
+  targetLapsEl.addEventListener('input', ()=>updateLabels());
+  targetLapsEl.addEventListener('change', ()=>{
+    targetLapsEl.value = String(getTargetLaps());
+    onSettingChange();
+  });
+
+  [
+    autoEndRaceEl,allowDNFEl,
+    cooldownEl,gateXEl,zoneEl,directionEl,assignDistEl,maxGapEl,
+    useColorEl,useMotionEl,hsvTolEl,minColorAreaEl,sMinEl,vMinEl,diffThEl,minAreaEl
+  ].forEach(el=>{
+    el.addEventListener('input', ()=>{ updateLabels(); scheduleSave(); });
+    el.addEventListener('change', ()=>{ onSettingChange(); });
+  });
+
+  // ---------------- Keyboard ----------------
+  window.addEventListener('keydown', (e)=>{
+    if(e.code==="Space"){ e.preventDefault(); paused=!paused; }
+    if(e.key==="r"||e.key==="R") resetRun();
+  });
+
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) stop(); });
+
+  // ---------------- INIT ----------------
+  loadBoats();
+  const saved = (()=>{
+    try{
+      const raw=localStorage.getItem(LS_SETTINGS);
+      return raw?JSON.parse(raw):null;
+    }catch{return null}
+  })();
+  if(saved) applySettings(saved, {doFlash:false});
+  else applySettings(PRESET_BOAT, {doFlash:false});
+
+  updateLabels();
+  enforceMaxIds();
+  renderRegistry();
+  renderBoard();
+  renderRace();
+  resetRaceState({keepAllTimeLaps:true});
+  setActiveTab('race');
+
+  function syncRegIdOptionsInit(){
+    syncRegIdOptions();
+    setSlot("A");
+  }
+  syncRegIdOptionsInit();
+
+  // initial draw on reg canvas (message)
+  ctxReg.clearRect(0,0,W,H);
+  drawOverlayReg();
+
+  // race clock updater
+  setInterval(()=>{
+    if(race.active) updateRaceClockUI();
+  }, 100);
+
+})();
+</script>
+</body>
+</html>
